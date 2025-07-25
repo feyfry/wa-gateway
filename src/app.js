@@ -17,6 +17,8 @@ const messageRoutes = require('./routes/messages');
 const sessionRoutes = require('./routes/session');
 
 const app = express();
+// Trust proxy for nginx
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());

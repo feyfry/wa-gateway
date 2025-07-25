@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Gateway Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50" x-data="whatsappGateway()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fab fa-whatsapp text-2xl text-green-500 mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-900">WhatsApp Gateway</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center" :class="status.isReady ? 'text-green-600' : 'text-red-600'">
+                        <div class="w-2 h-2 rounded-full mr-2" :class="status.isReady ? 'bg-green-500' : 'bg-red-500'"></div>
+                        <span class="text-sm font-medium" x-text="status.isReady ? 'Connected' : 'Disconnected'"></span>
+                    </div>
+                    <button 
+                        @click="logout()" 
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                        x-show="status.isReady">
+                        <i class="fas fa-sign-out-alt mr-1"></i>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div x-show="!authenticated" x-cloak class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h2 class="text-2xl font-bold mb-6 text-center">Login</h2>
+            <form @submit.prevent="login()">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">API Key</label>
+                    <input 
+                        type="password" 
+                        x-model="credentials.apiKey"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter your API Key"
+                        required>
+                </div>
+                <button 
+                    type="submit" 
+                    class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors"
+                    :disabled="loading">
+                    <span x-show="!loading">Login</span>
+                    <span x-show="loading"><i class="fas fa-spinner fa-spin"></i> Logging in...</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div x-show="authenticated" x-cloak class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Tabs -->
+        <div class="mb-8">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button 
+                        @click="activeTab = 'dashboard'"
+                        :class="activeTab === 'dashboard' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </button>
+                    <button 
+                        @click="activeTab = 'send'"
+                        :class="activeTab === 'send' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-paper-plane mr-2"></i>Send Message
+                    </button>
+                    <button 
+                        @click="activeTab = 'bulk'"
+                        :class="activeTab === 'bulk' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-users mr-2"></i>Bulk Message
+                    </button>
+                    <button 
+                        @click="activeTab = 'messages'"
+                        :class="activeTab === 'messages' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-comments mr-2"></i>Messages
+                    </button>
+                    <button 
+                        @click="activeTab = 'contacts'"
+                        :class="activeTab === 'contacts' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                        <i class="fas fa-address-book mr-2"></i>Contacts
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div x-show="activeTab === 'dashboard'" x-cloak>
+            <!-- QR Code Section -->
+            <div x-show="!status.isReady && status.hasQR" class="mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Scan QR Code</h3>
+                    <div class="flex justify-center">
+                        <img :src="qrCode" alt="QR Code" class="max-w-sm">
+                    </div>
+                    <p class="text-center text-gray-600 mt-4">Scan this QR code with your WhatsApp mobile app</p>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-100">
+                            <i class="fas fa-paper-plane text-blue-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Total Sent</p>
+                            <p class="text-2xl font-semibold text-gray-900" x-text="stats.sent || 0"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100">
+                            <i class="fas fa-inbox text-green-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Received</p>
+                            <p class="text-2xl font-semibold text-gray-900" x-text="stats.received || 0"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-red-100">
+                            <i class="fas fa-exclamation-triangle text-red-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Failed</p>
+                            <p class="text-2xl font-semibold text-gray-900" x-text="stats.failed || 0"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-yellow-100">
+                            <i class="fas fa-clock text-yellow-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Pending</p>
+                            <p class="text-2xl font-semibold text-gray-900" x-text="stats.pending || 0"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Send Message Tab -->
+        <div x-show="activeTab === 'send'" x-cloak>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Send Single Message</h3>
+                <form @submit.prevent="sendMessage()">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                            <input 
+                                type="text" 
+                                x-model="messageForm.to"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                placeholder="e.g., 628123456789"
+                                required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Media (Optional)</label>
+                            <input 
+                                type="file" 
+                                @change="messageForm.media = $event.target.files[0]"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                accept="image/*,application/pdf,.txt">
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                        <textarea 
+                            x-model="messageForm.message"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            rows="4"
+                            placeholder="Type your message here..."
+                            required></textarea>
+                    </div>
+                    <div class="mt-6">
+                        <button 
+                            type="submit" 
+                            class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg transition-colors"
+                            :disabled="loading || !status.isReady">
+                            <span x-show="!loading">
+                                <i class="fas fa-paper-plane mr-2"></i>Send Message
+                            </span>
+                            <span x-show="loading">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>Sending...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Bulk Message Tab -->
+        <div x-show="activeTab === 'bulk'" x-cloak>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">Send Bulk Message</h3>
+                <form @submit.prevent="sendBulkMessage()">
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Phone Numbers</label>
+                        <textarea 
+                            x-model="bulkForm.recipients"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            rows="4"
+                            placeholder="Enter phone numbers separated by new lines or commas&#10;e.g.,&#10;628123456789&#10;628987654321"
+                            required></textarea>
+                        <p class="text-sm text-gray-500 mt-1">Enter one phone number per line or separate with commas</p>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                        <textarea 
+                            x-model="bulkForm.message"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            rows="4"
+                            placeholder="Type your message here..."
+                            required></textarea>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Delay Between Messages (seconds)</label>
+                        <input 
+                            type="number" 
+                            x-model="bulkForm.delay"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            min="1"
+                            max="60"
+                            value="2">
+                    </div>
+                    <div>
+                        <button 
+                            type="submit" 
+                            class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+                            :disabled="loading || !status.isReady">
+                            <span x-show="!loading">
+                                <i class="fas fa-users mr-2"></i>Send Bulk Message
+                            </span>
+                            <span x-show="loading">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>Processing...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Messages Tab -->
+        <div x-show="activeTab === 'messages'" x-cloak>
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h3 class="text-lg font-semibold">Message History</h3>
+                </div>
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From/To</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="message in messages" :key="message.id">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <span x-text="message.direction === 'outgoing' ? message.to : message.from"></span>
+                                            <div class="text-xs text-gray-500" x-text="message.direction === 'outgoing' ? 'To' : 'From'"></div>
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-gray-900">
+                                            <div class="max-w-xs truncate" x-text="message.message"></div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span 
+                                                class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                                                :class="{
+                                                    'bg-green-100 text-green-800': message.status === 'sent',
+                                                    'bg-blue-100 text-blue-800': message.status === 'received',
+                                                    'bg-red-100 text-red-800': message.status === 'failed',
+                                                    'bg-yellow-100 text-yellow-800': message.status === 'pending'
+                                                }"
+                                                x-text="message.status">
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <span x-text="formatDate(message.timestamp)"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contacts Tab -->
+        <div x-show="activeTab === 'contacts'" x-cloak>
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h3 class="text-lg font-semibold">Contacts</h3>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <template x-for="contact in contacts" :key="contact.id">
+                            <div class="border rounded-lg p-4">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                        <i class="fas fa-user text-green-600"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-gray-900" x-text="contact.name || 'Unknown'"></p>
+                                        <p class="text-sm text-gray-500" x-text="contact.number"></p>
+                                    </div>
+                                </div>
+                                <button 
+                                    @click="quickMessage(contact.number)"
+                                    class="mt-3 w-full bg-green-500 hover:bg-green-600 text-white text-sm py-2 px-3 rounded transition-colors">
+                                    Quick Message
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div 
+        x-show="notification.show" 
+        x-transition
+        class="fixed bottom-4 right-4 z-50">
+        <div 
+            class="rounded-lg p-4 shadow-lg"
+            :class="{
+                'bg-green-500 text-white': notification.type === 'success',
+                'bg-red-500 text-white': notification.type === 'error',
+                'bg-blue-500 text-white': notification.type === 'info'
+            }">
+            <p x-text="notification.message"></p>
+        </div>
+    </div>
+
+    <script>
+        function whatsappGateway() {
+            return {
+                // State
+                authenticated: false,
+                loading: false,
+                activeTab: 'dashboard',
+                
+                // API Configuration
+                apiBaseUrl: window.location.origin + '/api/v1',
+                
+                // Authentication
+                credentials: {
+                    apiKey: ''
+                },
+                
+                // WhatsApp Status
+                status: {
+                    isReady: false,
+                    hasQR: false
+                },
+                qrCode: '',
+                
+                // Stats
+                stats: {},
+                
+                // Forms
+                messageForm: {
+                    to: '',
+                    message: '',
+                    media: null
+                },
+                bulkForm: {
+                    recipients: '',
+                    message: '',
+                    delay: 2
+                },
+                
+                // Data
+                messages: [],
+                contacts: [],
+                
+                // Notification
+                notification: {
+                    show: false,
+                    message: '',
+                    type: 'info'
+                },
+
+                // Initialize
+                init() {
+                    // Check if already authenticated
+                    const savedApiKey = localStorage.getItem('whatsapp_api_key');
+                    if (savedApiKey) {
+                        this.credentials.apiKey = savedApiKey;
+                        this.authenticated = true;
+                        this.loadData();
+                    }
+                },
+
+                // Authentication
+                async login() {
+                    if (!this.credentials.apiKey) {
+                        this.showNotification('Please enter API Key', 'error');
+                        return;
+                    }
+
+                    this.loading = true;
+                    try {
+                        const response = await this.apiCall('/session/status');
+                        localStorage.setItem('whatsapp_api_key', this.credentials.apiKey);
+                        this.authenticated = true;
+                        this.showNotification('Login successful', 'success');
+                        this.loadData();
+                    } catch (error) {
+                        this.showNotification('Invalid API Key', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async logout() {
+                    try {
+                        await this.apiCall('/session/logout', 'POST');
+                        localStorage.removeItem('whatsapp_api_key');
+                        this.authenticated = false;
+                        this.showNotification('Logged out successfully', 'success');
+                    } catch (error) {
+                        this.showNotification('Logout failed', 'error');
+                    }
+                },
+
+                // Data Loading
+                async loadData() {
+                    await Promise.all([
+                        this.checkStatus(),
+                        this.loadStats(),
+                        this.loadMessages(),
+                        this.loadContacts()
+                    ]);
+                    
+                    // Auto refresh status every 5 seconds
+                    setInterval(() => this.checkStatus(), 5000);
+                },
+
+                async checkStatus() {
+                    try {
+                        const response = await this.apiCall('/session/status');
+                        this.status = response.data;
+                        
+                        if (!this.status.isReady && this.status.hasQR) {
+                            await this.loadQRCode();
+                        }
+                    } catch (error) {
+                        console.error('Failed to check status:', error);
+                    }
+                },
+
+                async loadQRCode() {
+                    try {
+                        const response = await this.apiCall('/session/qr');
+                        this.qrCode = response.data.qrCode;
+                    } catch (error) {
+                        console.error('Failed to load QR code:', error);
+                    }
+                },
+
+                async loadStats() {
+                    try {
+                        const response = await this.apiCall('/messages/stats');
+                        this.stats = response.data.stats;
+                    } catch (error) {
+                        console.error('Failed to load stats:', error);
+                    }
+                },
+
+                async loadMessages() {
+                    try {
+                        const response = await this.apiCall('/messages');
+                        this.messages = response.data.messages;
+                    } catch (error) {
+                        console.error('Failed to load messages:', error);
+                    }
+                },
+
+                async loadContacts() {
+                    try {
+                        const response = await this.apiCall('/messages/contacts');
+                        this.contacts = response.data;
+                    } catch (error) {
+                        console.error('Failed to load contacts:', error);
+                    }
+                },
+
+                // Message Operations
+                async sendMessage() {
+                    if (!this.messageForm.to || !this.messageForm.message) {
+                        this.showNotification('Please fill all required fields', 'error');
+                        return;
+                    }
+
+                    this.loading = true;
+                    try {
+                        const formData = new FormData();
+                        formData.append('to', this.messageForm.to);
+                        formData.append('message', this.messageForm.message);
+                        
+                        if (this.messageForm.media) {
+                            formData.append('media', this.messageForm.media);
+                        }
+
+                        const response = await fetch(`${this.apiBaseUrl}/messages/send`, {
+                            method: 'POST',
+                            headers: {
+                                'X-API-Key': this.credentials.apiKey
+                            },
+                            body: formData
+                        });
+
+                        if (!response.ok) throw new Error('Failed to send message');
+                        
+                        this.showNotification('Message sent successfully', 'success');
+                        this.messageForm = { to: '', message: '', media: null };
+                        this.loadMessages();
+                        this.loadStats();
+                    } catch (error) {
+                        this.showNotification('Failed to send message', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async sendBulkMessage() {
+                    if (!this.bulkForm.recipients || !this.bulkForm.message) {
+                        this.showNotification('Please fill all required fields', 'error');
+                        return;
+                    }
+
+                    // Parse recipients
+                    const recipients = this.bulkForm.recipients
+                        .split(/[\n,]/)
+                        .map(r => r.trim())
+                        .filter(r => r);
+
+                    if (recipients.length === 0) {
+                        this.showNotification('No valid recipients found', 'error');
+                        return;
+                    }
+
+                    this.loading = true;
+                    try {
+                        await this.apiCall('/messages/bulk', 'POST', {
+                            recipients,
+                            message: this.bulkForm.message,
+                            options: { delay: this.bulkForm.delay * 1000 }
+                        });
+
+                        this.showNotification(`Bulk message started for ${recipients.length} recipients`, 'success');
+                        this.bulkForm = { recipients: '', message: '', delay: 2 };
+                    } catch (error) {
+                        this.showNotification('Failed to start bulk message', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                // Quick Actions
+                quickMessage(number) {
+                    this.activeTab = 'send';
+                    this.messageForm.to = number;
+                },
+
+                // Utilities
+                async apiCall(endpoint, method = 'GET', data = null) {
+                    const options = {
+                        method,
+                        headers: {
+                            'X-API-Key': this.credentials.apiKey,
+                            'Content-Type': 'application/json'
+                        }
+                    };
+
+                    if (data) {
+                        options.body = JSON.stringify(data);
+                    }
+
+                    const response = await fetch(`${this.apiBaseUrl}${endpoint}`, options);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    return await response.json();
+                },
+
+                showNotification(message, type = 'info') {
+                    this.notification = { show: true, message, type };
+                    setTimeout(() => {
+                        this.notification.show = false;
+                    }, 3000);
+                },
+
+                formatDate(timestamp) {
+                    return new Date(timestamp).toLocaleString();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

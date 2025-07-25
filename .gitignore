@@ -32,7 +32,6 @@ uploads/*
 
 # Data files
 data/
-*.json
 
 # PM2
 .pm2/
